@@ -2,14 +2,13 @@ import ipaddress
 
 
 class AssertMetric(object):
-    def __init__(self, metric_preference: int = 0x7FFFFFFF, route_metric: int = 0xFFFFFFFF, ip_address: str = "0.0.0.0", state_refresh_interval:int = None):
+    def __init__(self, metric_preference: int = 0x7FFFFFFF, route_metric: int = 0xFFFFFFFF, ip_address: str = "0.0.0.0"):
         if type(ip_address) is str:
             ip_address = ipaddress.ip_address(ip_address)
 
         self._metric_preference = metric_preference
         self._route_metric = route_metric
         self._ip_address = ip_address
-        self._state_refresh_interval = None
 
     def is_better_than(self, other):
         if self.metric_preference != other.metric_preference:
@@ -75,14 +74,6 @@ class AssertMetric(object):
             value = ipaddress.ip_address(value)
 
         self._ip_address = value
-
-    @property
-    def state_refresh_interval(self):
-        return self._state_refresh_interval
-
-    @state_refresh_interval.setter
-    def state_refresh_interval(self, value):
-        self._state_refresh_interval = value
 
     def get_ip(self):
         return str(self._ip_address)

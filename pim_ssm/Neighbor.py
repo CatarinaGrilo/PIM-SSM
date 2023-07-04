@@ -1,4 +1,5 @@
 from threading import Timer
+import random
 import time
 from tree.globals import HELLO_HOLD_TIME_NO_TIMEOUT, HELLO_HOLD_TIME_TIMEOUT
 from threading import Lock, RLock
@@ -12,25 +13,22 @@ class Neighbor:
     LOGGER = logging.getLogger('pim.Interface.Neighbor')
 
 
-    def __init__(self, contact_interface: "InterfacePim", ip, generation_id: int, DR_priority: int, hello_hold_time: int,
-                 state_refresh_capable: bool):
+    def __init__(self, contact_interface: "InterfacePim", ip, generation_id: int, DR_priority: int, hello_hold_time: int):
         if hello_hold_time == HELLO_HOLD_TIME_TIMEOUT:
             raise Exception
         logger_info = dict(contact_interface.interface_logger.extra)
         logger_info['neighbor_ip'] = ip
         self.neighbor_logger = logging.LoggerAdapter(self.LOGGER, logger_info)
-        self.neighbor_logger.debug('Monitoring new neighbor ' + ip + ' with GenerationID: ' + str(generation_id) +
-                                   '; DR_priority: ' + str(DR_priority) +
-                                   '; HelloHoldTime: ' + str(hello_hold_time) + '; StateRefreshCapable: ' +
-                                   str(state_refresh_capable))
+        self.neighbor_logger.debug('Monitoring new neighbor ' + ip)
+                                #    + ' with GenerationID: ' + str(generation_id) +
+                                #    '; DR_priority: ' + str(DR_priority) +
+                                #    '; HelloHoldTime: ' + str(hello_hold_time) + '; StateRefreshCapable: ')
         self.contact_interface = contact_interface
         self.ip = ip
         self.generation_id = generation_id
         self.DR_priority = DR_priority
         # todo lan prune delay
         # todo override interval
-        self.state_refresh_capable = state_refresh_capable
-
         self.neighbor_liveness_timer = None
         self.hello_hold_time = None
         self.set_hello_hold_time(hello_hold_time)
@@ -61,7 +59,9 @@ class Neighbor:
         if self.generation_id != generation_id:
             self.neighbor_logger.debug('Detected reset of ' + self.ip + '... new GenerationID: ' + str(generation_id))
             self.generation_id = generation_id
-            self.contact_interface.force_send_hello()
+            hello_timer_time = random.uniform(0, self.contact_interface.TRIGGERED_HELLO_PERIOD)
+            self.contact_interface.force_send_hello(hello_timer_time)
+            time.sleep(hello_timer_time)
             self.reset()
 
     def set_DR_priority(self, DR_priority):
@@ -70,18 +70,7 @@ class Neighbor:
             self.neighbor_logger.debug('DR_priority changed ' + self.ip + '... new GenerationID: ' + str(DR_priority))
             self.DR_priority = DR_priority
             self.contact_interface.DR_election()
-    """
-    def heartbeat(self):
-        if (self.hello_hold_time != HELLO_HOLD_TIME_TIMEOUT) and \
-                (self.hello_hold_time != HELLO_HOLD_TIME_NO_TIMEOUT):
-            print("HEARTBEAT")
-            if self.neighbor_liveness_timer is not None:
-                self.neighbor_liveness_timer.cancel()
-            self.neighbor_liveness_timer = Timer(self.hello_hold_time, self.remove)
-            self.neighbor_liveness_timer.start()
-            self.time_of_last_update = time.time()
-    """
-
+  
     def remove(self):
         print('HELLO TIMER EXPIRED... remove neighbor')
         if self.neighbor_liveness_timer is not None:
@@ -99,10 +88,10 @@ class Neighbor:
         self.contact_interface.new_or_reset_neighbor(self.ip)
 
 
-    def receive_hello(self, generation_id, DR_priority, hello_hold_time, state_refresh_capable):
+    def receive_hello(self, generation_id, DR_priority, hello_hold_time):
         # self.neighbor_logger.debug('Receive Hello message with HelloHoldTime: ' + str(hello_hold_time) +
         #                            '; GenerationID: ' + str(generation_id) + '; StateRefreshCapable: ' +
-        #                            str(state_refresh_capable) + ' from neighbor ' + self.ip)
+        #                             ' from neighbor ' + self.ip)
         if hello_hold_time == HELLO_HOLD_TIME_TIMEOUT:
             self.set_hello_hold_time(hello_hold_time)
         else:
@@ -110,8 +99,6 @@ class Neighbor:
             self.set_generation_id(generation_id)
             self.set_DR_priority(DR_priority)
             self.set_hello_hold_time(hello_hold_time)
-        if state_refresh_capable != self.state_refresh_capable:
-            self.state_refresh_capable = state_refresh_capable
 
     def subscribe_nlt_expiration(self, tree_if):
         with self.tree_interface_nlt_subscribers_lock:

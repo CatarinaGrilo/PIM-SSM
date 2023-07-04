@@ -14,11 +14,11 @@ kernel = None
 unicast_routing = None
 logger = None
 
-def add_pim_interface(interface_name, state_refresh_capable:bool=False):
+def add_pim_interface(interface_name):
     """
     Add a new interface to be controlled by PIM-SSM
     """
-    kernel.create_pim_interface(interface_name=interface_name, state_refresh_capable=state_refresh_capable)
+    kernel.create_pim_interface(interface_name=interface_name)
 
 def add_igmp_interface(interface_name):
     """
@@ -168,7 +168,7 @@ def main():
     logger = logging.getLogger('pim')
     logger.setLevel(logging.DEBUG)
     logger.addHandler(logging.StreamHandler(sys.stdout))
-
+    
     global kernel
     kernel = Kernel()
 

@@ -55,7 +55,6 @@ class KernelEntry:
 
         self.change()
         self.evaluate_olist_change()
-        self.timestamp_of_last_state_refresh_message_received = 0
         print('Tree created')
 
     def get_inbound_interface_index(self):
@@ -75,11 +74,11 @@ class KernelEntry:
         self.interface_state[index].recv_data_msg()
 
     def recv_assert_msg(self, index, packet):
-        print("recv assert")
         pkt_assert = packet.payload.payload
         metric = pkt_assert.metric
         metric_preference = pkt_assert.metric_preference
         assert_sender_ip = packet.ip_header.ip_src
+        print("recv assert from: ", assert_sender_ip)
 
         received_metric = AssertMetric(metric_preference=metric_preference, route_metric=metric, ip_address=assert_sender_ip)
         self.interface_state[index].recv_assert_msg(received_metric)
@@ -163,6 +162,10 @@ class KernelEntry:
         with self.CHANGE_STATE_LOCK:
             self.change()
             self.evaluate_olist_change()
+
+    def new_or_reset_neighbor_info(self, if_index, neighbor_ip):
+        # todo maybe lock de interfaces
+        return self.interface_state[if_index].new_or_reset_neighbor_info(neighbor_ip)
 
     def new_or_reset_neighbor(self, if_index, neighbor_ip):
         # todo maybe lock de interfaces

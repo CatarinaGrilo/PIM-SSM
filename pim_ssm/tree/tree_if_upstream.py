@@ -25,18 +25,18 @@ class TreeInterfaceUpstream(TreeInterface):
         self._join_state = UpstreamState.NotJoined
         self._join_timer = None
         self._last_rpf = self.get_neighbor_RPF()
-        self.join_prune_logger.debug('Upstream state transitions to ' + str(self._join_state))
+        #self.join_prune_logger.debug('Upstream state transitions to ' + str(self._join_state))
 
-        # TODO TESTE SOCKET RECV DATA PCKTS
-        self.socket_is_enabled = True
-        (s,g) = self.get_tree_id()
-        interface_name = self.get_interface().interface_name
-        self.socket_pkt = DataPacketsSocket.get_s_g_bpf_filter_code(s, g, interface_name)
+        # # TODO TESTE SOCKET RECV DATA PCKTS
+        # self.socket_is_enabled = True
+        # (s,g) = self.get_tree_id()
+        # interface_name = self.get_interface().interface_name
+        # self.socket_pkt = DataPacketsSocket.get_s_g_bpf_filter_code(s, g, interface_name)
 
-        # run receive method in background
-        receive_thread = threading.Thread(target=self.socket_recv)
-        receive_thread.daemon = True
-        receive_thread.start()
+        # # run receive method in background
+        # receive_thread = threading.Thread(target=self.socket_recv)
+        # receive_thread.daemon = True
+        # receive_thread.start()
 
         self.logger.debug('Created UpstreamInterface')
 
@@ -152,6 +152,10 @@ class TreeInterfaceUpstream(TreeInterface):
         return False
 
     # If new/reset neighbor is RPF neighbor
+    def new_or_reset_neighbor_info(self, neighbor_ip):
+        if neighbor_ip == self.get_neighbor_RPF() and self._join_state==UpstreamState.Joined:
+            return True
+            
     def new_or_reset_neighbor(self, neighbor_ip):
         if neighbor_ip == self.get_neighbor_RPF():
             self._join_state.RPFnbrGenIDChanges(self)
@@ -161,7 +165,7 @@ class TreeInterfaceUpstream(TreeInterface):
     #Override
     def delete(self, change_type_interface=False):
         self.socket_is_enabled = False
-        self.socket_pkt.close()
+        #self.socket_pkt.close()
         super().delete(change_type_interface)
         self.clear_assert_timer()
         self.clear_join_timer()

@@ -5,6 +5,7 @@ from threading import RLock
 from utils import if_indextoname
 from pyroute2 import IPDB
 
+routing = {} # KEY : des_ip, VALUE : (metric_administrative_distance, metric_cost, rpf_node, rpf_if, mask)
 
 def get_route(ip_dst: str):
     return UnicastRouting.get_route(ip_dst)
@@ -77,41 +78,49 @@ class UnicastRouting(object):
 
     @staticmethod
     def get_unicast_info(ip_dst):
-        metric_administrative_distance = 0xFFFFFFFF
-        metric_cost = 0xFFFFFFFF
-        rpf_node = ip_dst
-        oif = None
-        mask = 0
-        with UnicastRouting.lock:
-            unicast_route = UnicastRouting.get_route(ip_dst)
-            if unicast_route is not None:
-                oif = unicast_route.get("oif")
-                next_hop = unicast_route["gateway"]
-                multipaths = unicast_route["multipath"]
-                #prefsrc = unicast_route.get("prefsrc")
 
-                #rpf_node = ip_dst if (next_hop is None and prefsrc is not None) else next_hop
-                rpf_node = next_hop if next_hop is not None else ip_dst
-                highest_ip = ipaddress.ip_address("0.0.0.0")
-                for m in multipaths:
-                    if m["gateway"] is None:
-                        oif = m.get('oif')
-                        rpf_node = ip_dst
-                        break
-                    elif ipaddress.ip_address(m["gateway"]) > highest_ip:
-                        highest_ip = ipaddress.ip_address(m["gateway"])
-                        oif = m.get('oif')
-                        rpf_node = m["gateway"]
+        if routing.get(ip_dst, None) is not None:
+            #print(str(routing))
+            #print("Source is on dic\n\n")
+            return routing.get(ip_dst, None)
+        else:
+            #print("Source not on dic\n\n")
+            metric_administrative_distance = 0xFFFFFFFF
+            metric_cost = 0xFFFFFFFF
+            rpf_node = ip_dst
+            oif = None
+            mask = 0
+            with UnicastRouting.lock:
+                unicast_route = UnicastRouting.get_route(ip_dst)
+                if unicast_route is not None:
+                    oif = unicast_route.get("oif")
+                    next_hop = unicast_route["gateway"]
+                    multipaths = unicast_route["multipath"]
+                    #prefsrc = unicast_route.get("prefsrc")
 
-            metric_administrative_distance = unicast_route["proto"]
-            metric_cost = unicast_route["priority"]
-            metric_cost = metric_cost if metric_cost is not None else 0
-            mask = unicast_route["dst_len"]
+                    #rpf_node = ip_dst if (next_hop is None and prefsrc is not None) else next_hop
+                    rpf_node = next_hop if next_hop is not None else ip_dst
+                    highest_ip = ipaddress.ip_address("0.0.0.0")
+                    for m in multipaths:
+                        if m["gateway"] is None:
+                            oif = m.get('oif')
+                            rpf_node = ip_dst
+                            break
+                        elif ipaddress.ip_address(m["gateway"]) > highest_ip:
+                            highest_ip = ipaddress.ip_address(m["gateway"])
+                            oif = m.get('oif')
+                            rpf_node = m["gateway"]
 
-        interface_name = None if oif is None else if_indextoname(int(oif))
-        import Main
-        rpf_if = Main.kernel.vif_name_to_index_dic.get(interface_name)
-        return (metric_administrative_distance, metric_cost, rpf_node, rpf_if, mask)
+                metric_administrative_distance = unicast_route["proto"]
+                metric_cost = unicast_route["priority"]
+                metric_cost = metric_cost if metric_cost is not None else 0
+                mask = unicast_route["dst_len"]
+
+            interface_name = None if oif is None else if_indextoname(int(oif))
+            import Main
+            rpf_if = Main.kernel.vif_name_to_index_dic.get(interface_name)
+            routing[ip_dst] = (metric_administrative_distance, metric_cost, rpf_node, rpf_if, mask)
+            return (metric_administrative_distance, metric_cost, rpf_node, rpf_if, mask)
 
     @staticmethod
     def unicast_changes(ipdb, msg, action):
@@ -141,6 +150,7 @@ class UnicastRouting(object):
             #print(network_address + "/" + str(mask_len))
             subnet = ipaddress.ip_network(network_address + "/" + str(mask_len))
             #print(str(subnet))
+            routing.clear()
             UnicastRouting.lock.release()
             import Main
             print("Unicast changes")

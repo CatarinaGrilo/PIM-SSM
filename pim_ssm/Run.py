@@ -71,10 +71,7 @@ class MyDaemon(Daemon):
                 elif 'dr_priority' in args and args.dr_priority:
                     Main.dr_priority(args.dr_priority[0])
                 elif 'add_interface' in args and args.add_interface:
-                    Main.add_pim_interface(args.add_interface[0], False)
-                    connection.shutdown(socket.SHUT_RDWR)
-                elif 'add_interface_sr' in args and args.add_interface_sr:
-                    Main.add_pim_interface(args.add_interface_sr[0], True)
+                    Main.add_pim_interface(args.add_interface[0])
                     connection.shutdown(socket.SHUT_RDWR)
                 elif 'add_interface_igmp' in args and args.add_interface_igmp:
                     Main.add_igmp_interface(args.add_interface_igmp[0])
@@ -115,7 +112,6 @@ def main():
     group.add_argument("-ls", "--list_state", action="store_true", default=False, help="List state of IGMP")
     group.add_argument("-mr", "--multicast_routes", action="store_true", default=False, help="List Multicast Routing table")
     group.add_argument("-ai", "--add_interface", nargs=1, metavar='INTERFACE_NAME', help="Add PIM interface")
-    #group.add_argument("-aisr", "--add_interface_sr", nargs=1, metavar='INTERFACE_NAME', help="Add PIM interface with State Refresh enabled")
     group.add_argument("-aiigmp", "--add_interface_igmp", nargs=1, metavar='INTERFACE_NAME', help="Add IGMP interface")
     group.add_argument("-ri", "--remove_interface", nargs=1, metavar='INTERFACE_NAME', help="Remove PIM interface")
     group.add_argument("-riigmp", "--remove_interface_igmp", nargs=1, metavar='INTERFACE_NAME', help="Remove IGMP interface")

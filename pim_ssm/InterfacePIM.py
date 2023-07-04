@@ -13,6 +13,7 @@ from Packet.PacketPimHelloOptions import *
 from Packet.PacketPimHello import PacketPimHello
 from Packet.PacketPimHeader import PacketPimHeader
 from Packet.Packet import Packet
+from Neighbor import Neighbor
 from tree.globals import HELLO_HOLD_TIME_TIMEOUT, REFRESH_INTERVAL
 
 
@@ -26,7 +27,7 @@ class InterfacePim(Interface):
 
     LOGGER = logging.getLogger('pim.Interface')
 
-    def __init__(self, interface_name: str, vif_index:int, state_refresh_capable:bool=False):
+    def __init__(self, interface_name: str, vif_index:int):
         # generation id
         self.generation_id = random.getrandbits(32)
         self.DR_priority = 1
@@ -34,10 +35,6 @@ class InterfacePim(Interface):
         # When PIM is enabled on an interface or when a router first starts, the Hello Timer (HT)
         # MUST be set to random value between 0 and Triggered_Hello_Delay
         self.hello_timer = None
-
-        # state refresh capable
-        self._state_refresh_capable = False
-        self._neighbors_state_refresh_capable = False
 
         # todo: lan delay enabled
         self._lan_delay_enabled = False
@@ -119,14 +116,16 @@ class InterfacePim(Interface):
         super().send(data=data, group_ip=group_ip)
 
     #Random interval for initial Hello message on bootup or triggered Hello message to a rebooting neighbor
-    def force_send_hello(self):
+    def force_send_hello(self, immediately=False):
         """
         Force the transmission of a new Hello message
         """
         if self.hello_timer is not None:
             self.hello_timer.cancel()
-
-        hello_timer_time = random.uniform(0, self.TRIGGERED_HELLO_PERIOD)
+        if immediately:
+            hello_timer_time = 0
+        else:
+            hello_timer_time = random.uniform(0, self.TRIGGERED_HELLO_PERIOD)
         self.hello_timer = Timer(hello_timer_time, self.send_hello)
         self.hello_timer.start()
 
@@ -145,9 +144,6 @@ class InterfacePim(Interface):
 
         # TODO implementar LANPRUNEDELAY e OVERRIDE_INTERVAL por interface e nas maquinas de estados ler valor de interface e nao do globals.py
         #pim_payload.add_option(PacketPimHelloLANPruneDelay(lan_prune_delay=self._propagation_delay, override_interval=self._override_interval))
-
-        if self._state_refresh_capable:
-            pim_payload.add_option(PacketPimHelloStateRefreshCapable(REFRESH_INTERVAL))
 
         ph = PacketPimHeader(pim_payload)
         packet = Packet(payload=ph)
@@ -183,6 +179,12 @@ class InterfacePim(Interface):
             self._had_neighbors = has_neighbors
             self.get_kernel().interface_change_number_of_neighbors()
 
+    def new_or_reset_neighbor_info(self, neighbor_ip):
+        """
+        React to new neighbor or restart of known neighbor
+        """
+        return self.get_kernel().new_or_reset_neighbor_info(self.vif_index, neighbor_ip)
+
     def new_or_reset_neighbor(self, neighbor_ip):
         """
         React to new neighbor or restart of known neighbor
@@ -212,17 +214,6 @@ class InterfacePim(Interface):
     def i_am_dr(self):
         return self.DR_ip == self.ip_interface
 
-    '''
-    def add_neighbor(self, ip, random_number, hello_hold_time):
-        with self.neighbors_lock.genWlock():
-            if ip not in self.neighbors:
-                print("ADD NEIGHBOR")
-                from Neighbor import Neighbor
-                self.neighbors[ip] = Neighbor(self, ip, random_number, hello_hold_time)
-                self.force_send_hello()
-                self.check_number_of_neighbors()
-    '''
-
     def get_neighbors(self):
         """
         Get list of known neighbors
@@ -244,51 +235,6 @@ class InterfacePim(Interface):
             self.interface_logger.debug("Remove neighbor: " + ip)
             self.check_number_of_neighbors()
 
-    # def set_state_refresh_capable(self, value):
-    #     """
-    #     Change StateRefresh capability of interface
-    #     """
-    #     self._state_refresh_capable = value
-
-    def is_state_refresh_enabled(self):
-        """
-        Check if state refresh is enabled
-        """
-        return self._state_refresh_capable
-
-    # def is_state_refresh_capable(self):
-    #     """
-    #     Check StateRefresh capability of interface neighbors
-    #     """
-    #     with self.neighbors_lock.genWlock():
-    #         if len(self.neighbors) == 0:
-    #             return False
-
-    #         state_refresh_capable = True
-    #         for neighbor in list(self.neighbors.values()):
-    #             state_refresh_capable &= neighbor.state_refresh_capable
-
-    #         return state_refresh_capable
-
-    '''
-    def change_interface(self):
-        # check if ip change was already applied to interface
-        old_ip_address = self.ip_interface
-        new_ip_interface = netifaces.ifaddresses(self.interface_name)[netifaces.AF_INET][0]['addr']
-        if old_ip_address == new_ip_interface:
-            return
-        
-        self._send_socket.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(new_ip_interface))
-
-        self._recv_socket.setsockopt(socket.IPPROTO_IP, socket.IP_DROP_MEMBERSHIP,
-                     socket.inet_aton(Interface.MCAST_GRP) + socket.inet_aton(old_ip_address))
-
-        self._recv_socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
-                                     socket.inet_aton(Interface.MCAST_GRP) + socket.inet_aton(new_ip_interface))
-
-        self.ip_interface = new_ip_interface
-    '''
-
     ###########################################
     # Recv packets
     ###########################################
@@ -307,66 +253,71 @@ class InterfacePim(Interface):
         else:
             raise Exception
 
-        state_refresh_capable = (21 in options)
-
         with self.neighbors_lock.genWlock():
             if ip not in self.neighbors:
                 if hello_hold_time == 0:
                     return
                 print("ADD NEIGHBOR")
-                from Neighbor import Neighbor
-                self.neighbors[ip] = Neighbor(self, ip, generation_id, DR_priority, hello_hold_time, state_refresh_capable)
-                self.force_send_hello()
+                self.neighbors[ip] = Neighbor(self, ip, generation_id, DR_priority, hello_hold_time)
                 self.check_number_of_neighbors()
                 self.DR_election()
+                if self.new_or_reset_neighbor_info(ip):
+                    #print("IMMIDIATE HELLO")
+                    self.force_send_hello(immediately=True)
+                else:
+                    self.force_send_hello()
                 self.new_or_reset_neighbor(ip)
                 return
             else:
                 neighbor = self.neighbors[ip]
 
-        neighbor.receive_hello(generation_id, DR_priority, hello_hold_time, state_refresh_capable)
+        neighbor.receive_hello(generation_id, DR_priority, hello_hold_time)
 
     def receive_assert(self, packet):
         """
         Receive an Assert packet
         """
-        pkt_assert = packet.payload.payload  # PacketPimAssert
-        source = pkt_assert.source_address
-        group = pkt_assert.multicast_group_address
-        source_group = (source, group)
+        ip = packet.ip_header.ip_src
+        if ip in self.neighbors:
+            pkt_assert = packet.payload.payload  # PacketPimAssert
+            source = pkt_assert.source_address
+            group = pkt_assert.multicast_group_address
+            source_group = (source, group)
 
-        try:
-            self.get_kernel().get_routing_entry(source_group).recv_assert_msg(self.vif_index, packet)
-        except:
-            traceback.print_exc()
+            try:
+                self.get_kernel().get_routing_entry(source_group).recv_assert_msg(self.vif_index, packet)
+            except:
+                traceback.print_exc()
 
     def receive_join_prune(self, packet):
         """
         Receive Join/Prune packet
         """
-        pkt_join_prune = packet.payload.payload  # PacketPimJoinPrune
+        ip = packet.ip_header.ip_src
+        if ip in self.neighbors:
+            pkt_join_prune = packet.payload.payload  # PacketPimJoinPrune
 
-        join_prune_groups = pkt_join_prune.groups
-        for group in join_prune_groups:
-            multicast_group = group.multicast_group
-            joined_src_addresses = group.joined_src_addresses
-            pruned_src_addresses = group.pruned_src_addresses
+            join_prune_groups = pkt_join_prune.groups
+            for group in join_prune_groups:
+                multicast_group = group.multicast_group
+                joined_src_addresses = group.joined_src_addresses
+                pruned_src_addresses = group.pruned_src_addresses
 
-            for source_address in joined_src_addresses:
-                source_group = (source_address, multicast_group)
-                try:
-                    self.get_kernel().get_routing_entry(source_group).recv_join_msg(self.vif_index, packet)
-                except:
-                    traceback.print_exc()
-                    continue
+                for source_address in joined_src_addresses:
+                    source_group = (source_address, multicast_group)
+                    try:
+                        self.get_kernel().get_routing_entry(source_group).recv_join_msg(self.vif_index, packet)
+                    except:
+                        traceback.print_exc()
+                        continue
 
-            for source_address in pruned_src_addresses:
-                source_group = (source_address, multicast_group)
-                try:
-                    self.get_kernel().get_routing_entry(source_group).recv_prune_msg(self.vif_index, packet)
-                except:
-                    traceback.print_exc()
-                    continue
+                for source_address in pruned_src_addresses:
+                    source_group = (source_address, multicast_group)
+                    try:
+                        self.get_kernel().get_routing_entry(source_group).recv_prune_msg(self.vif_index, packet)
+                    except:
+                        traceback.print_exc()
+                        continue
 
     
     def receive_igmp(self, source_group, has_members):

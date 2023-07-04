@@ -108,7 +108,7 @@ class Kernel:
         return index
 
 
-    def create_pim_interface(self, interface_name: str, state_refresh_capable:bool):
+    def create_pim_interface(self, interface_name: str):
         with self.interface_lock:
             pim_interface = self.pim_interface.get(interface_name)
             igmp_interface = self.igmp_interface.get(interface_name)
@@ -123,7 +123,7 @@ class Kernel:
 
             ip_interface = None
             if interface_name not in self.pim_interface:
-                pim_interface = InterfacePim(interface_name, index, state_refresh_capable)
+                pim_interface = InterfacePim(interface_name, index)
                 self.pim_interface[interface_name] = pim_interface
                 ip_interface = pim_interface.ip_interface
 
@@ -263,7 +263,7 @@ class Kernel:
 
                 if im_msgtype == Kernel.IGMPMSG_NOCACHE:
                     print("IGMP NO CACHE")
-                    self.igmpmsg_nocache_handler(ip_src, ip_dst, im_vif)
+                    #self.igmpmsg_nocache_handler(ip_src, ip_dst, im_vif)
                 elif im_msgtype == Kernel.IGMPMSG_WRONGVIF:
                     print("WRONG VIF HANDLER")
                     self.igmpmsg_wrongvif_handler(ip_src, ip_dst, im_vif)
@@ -284,7 +284,8 @@ class Kernel:
     # receive multicast (S,G) packet in a outbound_interface
     def igmpmsg_wrongvif_handler(self, ip_src, ip_dst, iif):
         source_group_pair = (ip_src, ip_dst)
-        self.get_routing_entry(source_group_pair, create_if_not_existent=True).recv_data_msg(iif)
+        if self.get_routing_entry(source_group_pair, create_if_not_existent=False) is not None:
+            self.get_routing_entry(source_group_pair, create_if_not_existent=False).recv_data_msg(iif)
 
 
     ''' useless in PIM-DM... useful in PIM-SM
@@ -358,7 +359,16 @@ class Kernel:
                 for entry in groups_dict.values():
                     entry.change_at_number_of_neighbors()
 
-    # When new neighbor connects try to resend last state refresh msg (if AssertWinner)
+    def new_or_reset_neighbor_info(self, vif_index, neighbor_ip):
+        info = False
+        with self.rwlock.genRlock():
+            for groups_dict in self.routing.values():
+                for entry in groups_dict.values():
+                    info = entry.new_or_reset_neighbor_info(vif_index, neighbor_ip)
+                    if info:
+                        return info
+        return info
+
     def new_or_reset_neighbor(self, vif_index, neighbor_ip):
         with self.rwlock.genRlock():
             for groups_dict in self.routing.values():

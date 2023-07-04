@@ -33,10 +33,8 @@ class TreeInterface(metaclass=ABCMeta):
             group_state = igmp_interface.interface_state.get_group_state(kernel_entry.group_ip)
             #self._igmp_has_members = group_state.add_multicast_routing_entry(self)
             self._local_membership_state = LocalMembership.NoInfo
-            print("local Membership1" + str(self._local_membership_state))
         except:
             self._local_membership_state = LocalMembership.NoInfo
-            print("local Membership2" + str(self._local_membership_state))
 
 
         # Join State
@@ -108,18 +106,27 @@ class TreeInterface(metaclass=ABCMeta):
         pass
 
     def recv_assert_msg(self, received_metric: AssertMetric):
+        print("Metric received:" + str(received_metric._metric_preference) + " " +  str(received_metric._route_metric))
+        print("Metric AW:" + str(self._assert_winner_metric._metric_preference) + " " + str(self._assert_winner_metric._route_metric))
+        print("Metric MINE:" + str(self.my_assert_metric()._metric_preference) + " " +  str(self.my_assert_metric()._route_metric))
+        
         if self._assert_winner_metric.is_better_than(received_metric) and \
                 self._assert_winner_metric.ip_address == received_metric.ip_address:
             # received inferior assert from Assert Winner
+            print("INFERIOR AW")
             self._assert_state.receivedInferiorMetricFromWinner(self, received_metric)
         elif self.my_assert_metric().is_better_than(received_metric) and self.could_assert():
             # received inferior assert from non assert winner and could_assert
+            print("INFERIOR NON-AW")
             self._assert_state.receivedInferiorMetricFromNonWinner_couldAssertIsTrue(self)
-        elif received_metric.is_better_than(self._assert_winner_metric) or \
-                received_metric.equal_metric(self._assert_winner_metric):
+        elif received_metric.is_better_than(self._assert_winner_metric):
             # received preferred assert
-            equal_metric = received_metric.equal_metric(self._assert_winner_metric)
-            self._assert_state.receivedPreferedMetric(self, received_metric, equal_metric)
+            print("PREFERED")
+            self._assert_state.receivedPreferedMetric(self, received_metric)
+        elif received_metric.is_better_than(self.my_assert_metric()) and received_metric.get_ip()==self._assert_winner_metric.get_ip():
+            # received preferred assert
+            print("ACCEPTABLE")
+            self._assert_state.receivedAcceptableMetric(self, received_metric)
 
     def recv_prune_msg(self, upstream_neighbor_address, holdtime):
         if upstream_neighbor_address == self.get_ip():
@@ -223,6 +230,10 @@ class TreeInterface(metaclass=ABCMeta):
     def assert_winner_nlt_expires(self):
         self._assert_state.winnerLivelinessTimerExpires_GenIDChanged(self)
 
+    @abstractmethod
+    def new_or_reset_neighbor_info(self, neighbor_ip):
+        raise NotImplementedError()
+    
     @abstractmethod
     def new_or_reset_neighbor(self, neighbor_ip):
         raise NotImplementedError()

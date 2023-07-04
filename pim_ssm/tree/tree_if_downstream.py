@@ -103,6 +103,8 @@ class TreeInterfaceDownstream(TreeInterface):
     def is_join(self):
         return self._join_state == DownstreamState.Join or self._join_state ==DownstreamState.PrunePending
 
+    def new_or_reset_neighbor_info(self, neighbor_ip):
+        return
     def new_or_reset_neighbor(self, neighbor_ip):
         return
 
