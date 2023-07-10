@@ -86,6 +86,8 @@ class InterfacePim(Interface):
 
         super().__init__(interface_name, s, s, vif_index)
         super().enable()
+
+        self.already_sent_hello = False
         self.force_send_hello()
 
     def get_ip(self):
@@ -148,6 +150,9 @@ class InterfacePim(Interface):
         ph = PacketPimHeader(pim_payload)
         packet = Packet(payload=ph)
         self.send(packet.bytes())
+        
+        if self.already_sent_hello == False:
+            self.already_sent_hello = True
 
         # reschedule hello_timer
         self.hello_timer = Timer(self.HELLO_PERIOD, self.send_hello)

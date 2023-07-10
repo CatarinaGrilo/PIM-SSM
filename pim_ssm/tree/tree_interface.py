@@ -140,8 +140,14 @@ class TreeInterface(metaclass=ABCMeta):
     ######################################
     # Send messages
     ######################################
+    def was_hello_sent(self):
+        if self.get_interface().already_sent_hello == False:
+            self.get_interface().force_send_hello(immediately=True)
+            self.get_interface().already_sent_hello = True
 
     def send_prune(self, rpf=None, holdtime=None):
+        self.was_hello_sent()
+        
         if holdtime is None:
             holdtime = T_LIMIT
 
@@ -162,6 +168,8 @@ class TreeInterface(metaclass=ABCMeta):
             return
 
     def send_pruneecho(self):
+        self.was_hello_sent()
+
         holdtime = T_LIMIT
         try:
             (source, group) = self.get_tree_id()
@@ -176,12 +184,14 @@ class TreeInterface(metaclass=ABCMeta):
             return
 
     def send_join(self, rpf=None, holdtime=None):
+        self.was_hello_sent()
+
         if holdtime is None:
             holdtime = T_LIMIT
 
         if rpf is None:
             rpf = self.get_neighbor_RPF()
-
+            
         print("send join")
         try:
             (source, group) = self.get_tree_id()
@@ -195,8 +205,9 @@ class TreeInterface(metaclass=ABCMeta):
             return
 
     def send_assert(self):
-        print("send assert")
+        self.was_hello_sent()
 
+        print("send assert")
         try:
             (source, group) = self.get_tree_id()
             assert_metric = self.my_assert_metric()
@@ -209,8 +220,9 @@ class TreeInterface(metaclass=ABCMeta):
             return
 
     def send_assert_cancel(self):
-        print("send assert cancel")
+        self.was_hello_sent()
 
+        print("send assert cancel")
         try:
             (source, group) = self.get_tree_id()
             ph = PacketPimAssert(multicast_group_address=group, source_address=source, metric_preference=float("Inf"), metric=float("Inf"))
