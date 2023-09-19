@@ -1,5 +1,6 @@
 from .tree_interface import TreeInterface
 from .upstream_join import UpstreamState
+from .downstream_join import DownstreamState, DownstreamStateABS
 from threading import Timer
 from CustomTimer.RemainingTimer import RemainingTimer
 from .globals import *
@@ -23,33 +24,18 @@ class TreeInterfaceUpstream(TreeInterface):
 
         # Join State:
         self._join_state = UpstreamState.NotJoined
-        self._join_timer = None
+        self._joined_timer = None
         self._last_rpf = self.get_neighbor_RPF()
         #self.join_prune_logger.debug('Upstream state transitions to ' + str(self._join_state))
 
-        # # TODO TESTE SOCKET RECV DATA PCKTS
-        # self.socket_is_enabled = True
-        # (s,g) = self.get_tree_id()
-        # interface_name = self.get_interface().interface_name
-        # self.socket_pkt = DataPacketsSocket.get_s_g_bpf_filter_code(s, g, interface_name)
+        # Downstream Join
+        self._downstream_join_state = DownstreamState.NoInfo
+        self._join_timer_downstream = None
+        self._prune_pending_timer = None
+        self.join_prune_logger.debug('Downstream state transitions to ' + str(self._join_state))
 
-        # # run receive method in background
-        # receive_thread = threading.Thread(target=self.socket_recv)
-        # receive_thread.daemon = True
-        # receive_thread.start()
 
         self.logger.debug('Created UpstreamInterface')
-
-
-    def socket_recv(self):
-        while self.socket_is_enabled:
-            try:
-                self.socket_pkt.recvfrom(0)
-                print("PACOTE DADOS RECEBIDO")
-                self.recv_data_msg()
-            except:
-                traceback.print_exc()
-                continue
 
     ##########################################
     # Set state
@@ -62,34 +48,87 @@ class TreeInterfaceUpstream(TreeInterface):
 
                 self.change_tree()
                 self.evaluate_ingroup()
+    
+    ##########################################
+    # Set state downsstream
+    ##########################################
+    def set_join_state(self, new_state: DownstreamStateABS):
+        with self.get_state_lock():
+            if new_state != self._downstream_join_state:
+                self._downstream_join_state = new_state
+                self.join_prune_logger.debug('Downstream state transitions to ' + str(new_state))
+
+                self.change_tree()
+                self.evaluate_ingroup()
 
     ##########################################
     # Check timers
     ##########################################
+    def is_joined_timer_running(self):
+        return self._joined_timer is not None and self._joined_timer.is_alive()
+
+    def remaining_joined_timer(self):
+        return 0 if not self._joined_timer else self._joined_timer.time_remaining()
+
+    ##########################################
+    # Check timers downstream
+    ##########################################
+    def is_prune_pending_timer_running(self):
+        return self._prune_pending_timer is not None and self._prune_pending_timer.is_alive()
+
     def is_join_timer_running(self):
-        return self._join_timer is not None and self._join_timer.is_alive()
+        return self._join_timer_downstream is not None and self._join_timer_downstream.is_alive()
 
     def remaining_join_timer(self):
-        return 0 if not self._join_timer else self._join_timer.time_remaining()
+        return 0 if not self._join_timer_downstream else self._join_timer_downstream.time_remaining()
 
     ##########################################
     # Set timers
     ##########################################
 
+    def set_joined_timer(self, time):
+        self.clear_joined_timer()
+        self._joined_timer = RemainingTimer(time, self.joined_timeout)
+        self._joined_timer.start()
+
+    def clear_joined_timer(self):
+        if self._joined_timer is not None:
+            self._joined_timer.cancel()
+    
+    ##########################################
+    # Set timers downstream
+    ##########################################
+    def set_prune_pending_timer(self, time):
+        self.clear_prune_pending_timer()
+        self._prune_pending_timer = Timer(time, self.prune_pending_timeout)
+        self._prune_pending_timer.start()
+
+    def clear_prune_pending_timer(self):
+        if self._prune_pending_timer is not None:
+            self._prune_pending_timer.cancel()
+
     def set_join_timer(self, time):
         self.clear_join_timer()
-        self._join_timer = RemainingTimer(time, self.join_timeout)
-        self._join_timer.start()
+        self._join_timer_downstream = RemainingTimer(time, self.join_timeout)
+        self._join_timer_downstream.start()
 
     def clear_join_timer(self):
-        if self._join_timer is not None:
-            self._join_timer.cancel()
-
+        if self._join_timer_downstream is not None:
+            self._join_timer_downstream.cancel()
     ###########################################
     # Timer timeout
     ###########################################
-    def join_timeout(self):
+    def joined_timeout(self):
         self._join_state.JTexpires(self)
+
+    ###########################################
+    # Timer timeout downstream
+    ###########################################
+    def prune_pending_timeout(self):
+        self._downstream_join_state.PPTexpires(self)
+
+    def join_timeout(self):
+        self._downstream_join_state.JTexpires(self)
 
     ###########################################
     # Recv packets
@@ -102,12 +141,18 @@ class TreeInterfaceUpstream(TreeInterface):
         self.set_receceived_join_holdtime(holdtime)
         if upstream_neighbor_address == self.get_neighbor_RPF():
             self._join_state.seeJoinToRPFnbr(self)
+        
+        if upstream_neighbor_address == self.get_ip():
+            self._downstream_join_state.receivedJoin(self, holdtime)
 
     def recv_prune_msg(self, upstream_neighbor_address, holdtime):
         super().recv_prune_msg(upstream_neighbor_address, holdtime)
         self.set_receceived_join_holdtime(holdtime)
         if upstream_neighbor_address == self.get_neighbor_RPF():
             self._join_state.seePruneToRPFnbr(self)
+        
+        if upstream_neighbor_address == self.get_ip():
+            self._downstream_join_state.receivedPrune(self, holdtime)
 
     ###########################################
     # Change olist
@@ -149,7 +194,10 @@ class TreeInterfaceUpstream(TreeInterface):
     ####################################################################
     #Override
     def is_forwarding(self):
-        return False
+        return ((self.has_neighbors() and self.is_join()) or self.pim_include()) and not self.lost_assert()
+
+    def is_join(self):
+        return self._downstream_join_state == DownstreamState.Join or self._downstream_join_state ==DownstreamState.PrunePending
 
     # If new/reset neighbor is RPF neighbor
     def new_or_reset_neighbor_info(self, neighbor_ip):
@@ -168,7 +216,7 @@ class TreeInterfaceUpstream(TreeInterface):
         #self.socket_pkt.close()
         super().delete(change_type_interface)
         self.clear_assert_timer()
-        self.clear_join_timer()
+        self.clear_joined_timer()
 
         # Clear Graft/Prune State:
         self._join_state = None

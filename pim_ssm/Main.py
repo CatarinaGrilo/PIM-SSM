@@ -132,7 +132,9 @@ def list_routing_state():
                     prune_state = type(interface_state._join_state).__name__
                     is_forwarding = interface_state.is_forwarding()
                 else:
-                    prune_state = type(interface_state._join_state).__name__
+                    prune_state1 = type(interface_state._join_state).__name__
+                    downstream_state = type(interface_state._downstream_join_state).__name__
+                    prune_state = prune_state1 + '/' + downstream_state
                     is_forwarding = "upstream"
             except:
                 prune_state = "-"

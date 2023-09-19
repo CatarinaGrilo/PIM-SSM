@@ -101,7 +101,7 @@ class Joined(UpstreamStateABC):
             interface.join_prune_logger.debug('JoinDesired, J -> NJ')
             interface.set_state(UpstreamState.NotJoined)
             interface.send_prune()
-            interface.clear_join_timer()
+            interface.clear_joined_timer()
 
     @staticmethod
     def seeJoinToRPFnbr(interface: "TreeInterfaceUpstream"):
@@ -112,8 +112,8 @@ class Joined(UpstreamStateABC):
         """
         interface.join_prune_logger.debug('seeJoinToRPFnbr, J -> J')
         t_joinsuppress = min(interface.get_received_join_holdtime(), pim_globals.t_suppressed()) 
-        if interface.remaining_join_timer() < t_joinsuppress:
-            interface.set_join_timer(time=t_joinsuppress)
+        if interface.remaining_joined_timer() < t_joinsuppress:
+            interface.set_joined_timer(time=t_joinsuppress)
 
     @staticmethod
     def seePruneToRPFnbr(interface: "TreeInterfaceUpstream"):
@@ -123,8 +123,8 @@ class Joined(UpstreamStateABC):
         @type interface: TreeInterfaceUpstream
         """
         interface.join_prune_logger.debug('seePruneToRPFnbr, J -> J')
-        if interface.remaining_join_timer() > pim_globals.JP_OVERRIDE_INTERVAL:
-            interface.set_join_timer(time=pim_globals.OVERRIDE_INTERVAL)
+        if interface.remaining_joined_timer() > pim_globals.JP_OVERRIDE_INTERVAL:
+            interface.set_joined_timer(time=pim_globals.OVERRIDE_INTERVAL)
 
     @staticmethod
     def JTexpires(interface: "TreeInterfaceUpstream"):
@@ -136,7 +136,7 @@ class Joined(UpstreamStateABC):
         interface.join_prune_logger.debug('JTexpires, J -> J')
         if not interface.is_S_directly_conn():
             interface.send_join()
-            interface.set_join_timer(time=pim_globals.T_PERIODIC)
+            interface.set_joined_timer(time=pim_globals.T_PERIODIC)
 
     @staticmethod
     def RPFnbrChangesNotOnAssert(interface: "TreeInterfaceUpstream", last_rpf, current_rpf):
@@ -151,7 +151,7 @@ class Joined(UpstreamStateABC):
             interface.join_prune_logger.debug('RPFnbrChangesNotOnAssert, J -> J')
             interface.send_prune(last_rpf)
             interface.send_join(current_rpf)
-            interface.set_join_timer(time=pim_globals.T_PERIODIC)
+            interface.set_joined_timer(time=pim_globals.T_PERIODIC)
 
     @staticmethod
     def RPFnbrGenIDChanges(interface: "TreeInterfaceUpstream"):
@@ -162,8 +162,8 @@ class Joined(UpstreamStateABC):
         @type interface: TreeInterfaceUpstream
         """
         interface.join_prune_logger.debug('RPFnbrGenIDChanges, J -> J')
-        if interface.remaining_join_timer() > pim_globals.JP_OVERRIDE_INTERVAL:
-            interface.set_join_timer(time=pim_globals.OVERRIDE_INTERVAL)
+        if interface.remaining_joined_timer() > pim_globals.JP_OVERRIDE_INTERVAL:
+            interface.set_joined_timer(time=pim_globals.OVERRIDE_INTERVAL)
 
 
     @staticmethod
@@ -175,9 +175,9 @@ class Joined(UpstreamStateABC):
         @type interface: TreeInterfaceUpstream
         """
         interface.join_prune_logger.debug('RPFnbrChangesOnAssert, J -> J')
-        print(str(interface.remaining_join_timer()))
-        if interface.remaining_join_timer() > pim_globals.JP_OVERRIDE_INTERVAL:
-            interface.set_join_timer(time=pim_globals.OVERRIDE_INTERVAL)
+        print(str(interface.remaining_joined_timer()))
+        if interface.remaining_joined_timer() > pim_globals.JP_OVERRIDE_INTERVAL:
+            interface.set_joined_timer(time=pim_globals.OVERRIDE_INTERVAL)
 
 
     def __str__(self):
@@ -203,7 +203,7 @@ class NotJoined(UpstreamStateABC):
             interface.join_prune_logger.debug('JoinDesired, NJ -> J')
             interface.set_state(UpstreamState.Joined)
             interface.send_join()
-            interface.set_join_timer(time=pim_globals.T_PERIODIC)
+            interface.set_joined_timer(time=pim_globals.T_PERIODIC)
 
     @staticmethod
     def seeJoinToRPFnbr(interface: "TreeInterfaceUpstream"):

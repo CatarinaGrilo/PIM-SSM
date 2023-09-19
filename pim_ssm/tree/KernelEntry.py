@@ -63,7 +63,7 @@ class KernelEntry:
     def get_outbound_interfaces_indexes(self):
         outbound_indexes = [0]*Main.kernel.MAXVIFS
         for (index, state) in self.interface_state.items():
-            outbound_indexes[index] = state.is_forwarding()
+            outbound_indexes[index] = state.is_forwarding() and index != self.inbound_interface_index
         return outbound_indexes
 
     ################################################
@@ -137,6 +137,7 @@ class KernelEntry:
 
                 # remove old interfaces
                 if old_upstream_interface is not None:
+                    print("\n\nHEREEEE DELETE OLD UPSTREAM: NEED DO SEND ASSERTCANCEL\n\n")
                     old_upstream_interface.delete(change_type_interface=True)
                 if old_downstream_interface is not None:
                     old_downstream_interface.delete(change_type_interface=True)
@@ -201,7 +202,8 @@ class KernelEntry:
 
     def change(self):
         with self._multicast_change:
-            Main.kernel.set_multicast_route(self)
+            if self.inbound_interface_index is not None:
+                Main.kernel.set_multicast_route(self)
 
     def delete(self):
         with self._multicast_change:
