@@ -294,9 +294,12 @@ class LoserState(AssertStateABC):
 
     @staticmethod
     def receivedInferiorMetricFromWinner(interface: "TreeInterfaceDownstream", metric):
-        interface.assert_logger.debug('receivedInferiorMetricFromWinner, L -> NI')
-
-        if metric.is_better_than(interface.my_assert_metric()) and metric != AssertMetric():
+        
+        
+        if metric.metric_preference == 2147483647 and metric.route_metric == 4294967295:
+            interface.assert_logger.debug('receivedInferiorMetricFromWinner, L -> NI')
+            LoserState._to_NoInfo(interface)
+        elif metric.is_better_than(interface.my_assert_metric()):
             interface.assert_logger.debug('receivedInferiorMetricFromWinnerAndIsBetterThanMyMetric, L -> L')
             interface.set_assert_winner_metric(metric)
             interface.set_assert_timer(pim_globals.ASSERT_TIME)
