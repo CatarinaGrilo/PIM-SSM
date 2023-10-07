@@ -104,23 +104,6 @@ We have built some list commands that can be used to check the "internals" of th
    ```
    sudo python3 Run.py -ln
    ```
-
- - #### List sequence numbers:
-
-    Verify all stored sequence numbers.
-
-   ```
-   sudo python3 Run.py -lsn
-   ```
-
- - #### List neighbor state:
-
-    Verify all state regarding each neighbor, whether they are UPSTREAM or NOT UPSTREAM and in the latter whether they are INTERESTED or NOT INTERESTED in receiving data packets.
-
-   ```
-   sudo python3 Run.py -lns
-   ```
-
  - #### List state machines:
 
     List all state machines and corresponding state of all trees that are being monitored. Also list IGMPv3 state for each group being monitored.

@@ -86,23 +86,23 @@ def list_state():
     For IGMP list the state of each group, regarding each interface
     For HPIM-SM list all trees and state of each interface
     """
-    state_text = "\n\n\n\n" + "Multicast Routing State:\n" + list_routing_state()
+    state_text = "\nIGMPv3 State:\n" + list_igmp_state() +"\n\n" + "Multicast Routing State:\n" + list_routing_state()
     return state_text
 
 def list_igmp_state():
     """
     List IGMP state (state of each group regarding each interface)
     """
-    t = PrettyTable(['Interface', 'RouterState', 'Group Adress', 'GroupState'])
+    t = PrettyTable(['Interface', 'Group Address', 'Group State', 'Sources'])
+    sources = " "
     for (interface_name, interface_obj) in list(igmp_interfaces.items()):
         interface_state = interface_obj.interface_state
-        state_txt = interface_state.print_state()
-        print(interface_state.group_state.items())
-
-        for (group_addr, group_state) in list(interface_state.group_state.items()):
-            print(group_addr)
-            group_state_txt = group_state.print_state()
-            t.add_row([interface_name, state_txt, group_addr, group_state_txt])
+        for key in interface_state.group_state:
+            group_state_txt = interface_state.group_state[key].filter_mode
+            for source in interface_state.group_state[key].source_addresses:
+                sources += str(source) + "; "
+            t.add_row([interface_name, key, group_state_txt, sources])
+            sources = " "
     return str(t)
 
 def list_routing_state():
