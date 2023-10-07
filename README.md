@@ -1,5 +1,6 @@
 # PIM-SSM
-We have implemented PIM-SSM multicast routing protocol (RFC7761, specifically following Section 4.8)
+We have implemented PIM-SSM multicast routing protocol (RFC7761, specifically following Section 4.8).
+
 This repository stores the implementation of this protocol. The implementation is written in Python and is destined to Linux systems.
 
 Additionally, IGMPv3 is implemented alongside with PIM-SSM to detect interest of hosts.
